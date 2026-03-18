@@ -92,7 +92,7 @@ impl Texture for ImageTexture {
         let y = (v * self.img.height() as f32) as u32;
 
         let x = x.clamp(0, self.img.width() - 1);
-        let y = y.clamp(0, self.img.width() - 1);
+        let y = y.clamp(0, self.img.height() - 1);
         *self.img.get_pixel(x, y)
     }
 }

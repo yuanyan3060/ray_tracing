@@ -19,6 +19,7 @@ pub fn random_unit_vec3() -> Vec3 {
     }
 }
 
+#[allow(unused)]
 pub fn random_on_hemisphere(normal: Vec3) -> Vec3 {
     let on_unit_sphere = random_unit_vec3();
     if on_unit_sphere.dot(normal) > 0.0 {

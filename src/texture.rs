@@ -42,6 +42,7 @@ pub struct CheckerTexture {
 }
 
 impl CheckerTexture {
+    #[allow(unused)]
     pub fn new<T0, T1>(inv_scale: f32, even: T0, odd: T1) -> Self
     where
         T0: Texture + 'static,
@@ -54,6 +55,7 @@ impl CheckerTexture {
         }
     }
 
+    #[allow(unused)]
     pub fn from_color(inv_scale: f32, even: Rgb<f32>, odd: Rgb<f32>) -> Self {
         Self::new(inv_scale, SolidColor::new(even), SolidColor::new(odd))
     }

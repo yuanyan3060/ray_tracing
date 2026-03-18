@@ -1,6 +1,6 @@
 use std::f32::consts::PI;
 
-use glam::{Vec2, Vec3};
+use glam::Vec3;
 
 use crate::aabb::AABB;
 use crate::material::Material;
@@ -44,6 +44,7 @@ pub struct Sphere<M: Material> {
 }
 
 impl<M: Material> Sphere<M> {
+    #[allow(unused)]
     pub fn new(pos: Vec3, radius: f32, material: M) -> Self {
         Self {
             pos,

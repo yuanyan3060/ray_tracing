@@ -22,6 +22,7 @@ impl Default for AABB {
 }
 
 impl AABB {
+    #[allow(unused)]
     pub fn new(x: Range<f32>, y: Range<f32>, z: Range<f32>) -> Self {
         Self { x, y, z }
     }

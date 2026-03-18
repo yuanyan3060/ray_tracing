@@ -157,11 +157,13 @@ fn reflectance(cosine: f32, refraction_index: f32) -> f32 {
     r0 + (1.0 - r0) * (1.0 - cosine).powi(5)
 }
 
+#[allow(unused)]
 pub struct DiffuseLight {
     pub tex: Box<dyn Texture>,
 }
 
 impl DiffuseLight {
+    #[allow(unused)]
     pub fn new(tex: impl Texture + 'static) -> Self {
         Self {
             tex: Box::new(tex) as _,

@@ -1,12 +1,13 @@
 use std::f32::consts::PI;
 
 use glam::Vec3;
-use image::buffer::{PixelsMut, RowsMut};
+use image::buffer::PixelsMut;
 use image::{Rgb, RgbImage};
 use rand::RngExt;
 use rand::rngs::ThreadRng;
 
-use crate::hit::{Hitable, HitableList};
+use crate::hit::Hitable;
+use crate::texture::Texture;
 use crate::ray::Ray;
 use crate::util::random_in_unit_disk;
 
@@ -19,6 +20,7 @@ pub struct Camera {
     pub vfov: f32,
     pub defocus: f32,
     pub foucus_dist: f32,
+    pub env: Option<Box<dyn Texture>>,
 }
 
 impl Default for Camera {
@@ -32,11 +34,13 @@ impl Default for Camera {
             vfov: PI * 0.5,
             defocus: PI * 0.0,
             foucus_dist: 10.0,
+            env: None,
         }
     }
 }
 
 impl Camera {
+    #[allow(unused)]
     pub fn set_vfov_from_degree(&mut self, degree: f32) {
         self.vfov = PI * degree / 180.0
     }
@@ -97,7 +101,7 @@ impl Camera {
 
                 for _ in 0..self.samples_per_pixel {
                     let ray = get_ray(x as u32, y as u32, &mut rng);
-                    let c = ray_color(&ray, world, self.max_depth);
+                    let c = ray_color(&ray, world, self.env.as_deref(), self.max_depth, true);
                     for i in 0..3 {
                         color[i] += c.0[i]
                     }
@@ -122,6 +126,7 @@ impl Camera {
     }
 }
 
+#[allow(unused)]
 fn ray_normal_color<H: Hitable>(ray: &Ray, hitable: &H, depth: u32) -> Rgb<f32> {
     if depth == 0 {
         return Rgb([0.0, 0.0, 0.0]);
@@ -140,7 +145,13 @@ fn ray_normal_color<H: Hitable>(ray: &Ray, hitable: &H, depth: u32) -> Rgb<f32> 
     ]);
 }
 
-fn ray_color<H: Hitable>(ray: &Ray, hitable: &H, depth: u32) -> Rgb<f32> {
+fn ray_color<H: Hitable>(
+    ray: &Ray,
+    hitable: &H,
+    env: Option<&dyn Texture>,
+    depth: u32,
+    first: bool,
+) -> Rgb<f32> {
     if depth == 0 {
         return Rgb([0.0, 0.0, 0.0]);
     }
@@ -148,7 +159,7 @@ fn ray_color<H: Hitable>(ray: &Ray, hitable: &H, depth: u32) -> Rgb<f32> {
     if let Some(hit) = hitable.hit(ray, 0.01, 100000.0) {
         let color_from_emission = hit.material.emitted(hit.u, hit.v, hit.pos);
         if let Some(scatter) = hit.material.scatter(ray, &hit) {
-            let mut color = ray_color(&scatter.ray, hitable, depth - 1);
+            let mut color = ray_color(&scatter.ray, hitable, env, depth - 1, false);
             for i in 0..3 {
                 color.0[i] *= scatter.attenuation.0[i];
                 color.0[i] += color_from_emission.0[i];
@@ -159,12 +170,24 @@ fn ray_color<H: Hitable>(ray: &Ray, hitable: &H, depth: u32) -> Rgb<f32> {
     }
 
     let dir = ray.direction().normalize();
-    let a = 0.5 * (dir.y + 1.0);
-    return Rgb([
-        (1.0 - a) + (a * 0.5),
-        (1.0 - a) + (a * 0.7),
-        (1.0 - a) + (a * 1.0),
-    ]);
+    match (env, first) {
+        (Some(env), false) => {
+            let phi = dir.z.atan2(dir.x);
+            let theta = dir.y.asin();
+
+            let u = 1.0 - (phi + PI) / (2.0 * PI);
+            let v = (theta + PI / 2.0) / PI;
+            env.color(u, v, dir)
+        }
+        _ => {
+            let a = 0.5 * (dir.y + 1.0);
+            Rgb([
+                (1.0 - a) + (a * 0.5),
+                (1.0 - a) + (a * 0.7),
+                (1.0 - a) + (a * 1.0),
+            ])
+        }
+    }
 }
 
 fn linear_to_gamma(color: Rgb<f32>, pixel_samples_scale: f32) -> Rgb<u8> {

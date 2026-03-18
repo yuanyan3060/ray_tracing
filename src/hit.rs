@@ -8,7 +8,7 @@ pub struct HitRecord<'a> {
     pub normal: Vec3,
     pub t: f32,
     pub front_face: bool,
-    pub material: &'a dyn Material
+    pub material: &'a dyn Material,
 }
 
 pub trait Hitable {
@@ -27,10 +27,10 @@ pub fn face_normal(ray: &Ray, outward_normal: &mut Vec3) -> bool {
 pub struct Sphere<M: Material> {
     pub pos: Vec3,
     pub radius: f32,
-    pub material: M
+    pub material: M,
 }
 
-impl <M: Material> Hitable for Sphere<M> {
+impl<M: Material> Hitable for Sphere<M> {
     fn hit(&self, ray: &Ray, ray_min: f32, ray_max: f32) -> Option<HitRecord<'_>> {
         let oc = self.pos - ray.postion();
         let a = ray.direction().length_squared();
@@ -61,7 +61,7 @@ impl <M: Material> Hitable for Sphere<M> {
             normal,
             t,
             front_face,
-            material: &self.material
+            material: &self.material,
         });
     }
 }

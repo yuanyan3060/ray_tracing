@@ -6,15 +6,17 @@ use rand::RngExt;
 
 use crate::hit::{Hitable, HitableList};
 use crate::ray::Ray;
+use crate::util::random_in_unit_disk;
 
 pub struct Camera {
     pub look_from: Vec3,
     pub look_at: Vec3,
     pub vup: Vec3,
-    pub dir: Vec3,
     pub samples_per_pixel: u32,
     pub max_depth: u32,
     pub vfov: f32,
+    pub defocus: f32,
+    pub foucus_dist: f32,
 }
 
 impl Default for Camera {
@@ -23,10 +25,11 @@ impl Default for Camera {
             look_from: Vec3::ZERO,
             look_at: Vec3::new(0.0, 0.0, -1.0),
             vup: Vec3::new(0.0, 1.0, 0.0),
-            dir: Vec3::NEG_Z,
             samples_per_pixel: 200,
             max_depth: 50,
-            vfov: PI / 2.0,
+            vfov: PI * 0.5,
+            defocus: PI * 0.0,
+            foucus_dist: 10.0,
         }
     }
 }
@@ -36,13 +39,17 @@ impl Camera {
         self.vfov = PI * degree / 180.0
     }
 
+    fn defocus_disk_sample(&self, defocus_disk_u: Vec3, defocus_disk_v: Vec3) -> Vec3 {
+        let v = random_in_unit_disk();
+        self.look_from + (v.x * defocus_disk_u) + (v.y * defocus_disk_v)
+    }
+
     pub fn render(&self, img: &mut RgbImage, world: &HitableList) {
         let (img_w, img_h) = img.dimensions();
 
-        let focal = (self.look_from - self.look_at).length();
         let pos = self.look_from;
 
-        let viewport_height = 2.0 * (self.vfov * 0.5).tan() * focal;
+        let viewport_height = 2.0 * (self.vfov * 0.5).tan() * self.foucus_dist;
         let viewport_width = viewport_height * (img_w as f32 / img_h as f32);
 
         let w = (self.look_from - self.look_at).normalize();
@@ -56,9 +63,14 @@ impl Camera {
         let pixel_delta_v = viewport_v / img_h as f32;
 
         let viewport_left_up =
-            pos - (w * focal) - (viewport_u * 0.5) - (viewport_v * 0.5);
+            pos - (w * self.foucus_dist) - (viewport_u * 0.5) - (viewport_v * 0.5);
 
         let pixel_left_up = viewport_left_up + pixel_delta_u * 0.5 + pixel_delta_v * 0.5;
+
+        let defocus_radius = self.foucus_dist * (self.defocus * 0.5).tan();
+
+        let defocus_disk_u = defocus_radius * u;
+        let defocus_disk_v = defocus_radius * v;
 
         let mut rng = rand::rng();
 
@@ -66,9 +78,15 @@ impl Camera {
             let x = x as f32 + rng.random_range(-0.5..0.5);
             let y = y as f32 + rng.random_range(-0.5..0.5);
 
+            let ray_pos = if self.defocus <= 0.0 {
+                pos
+            } else {
+                self.defocus_disk_sample(defocus_disk_u, defocus_disk_v)
+            };
+
             let pixel_sample = pixel_left_up + x * pixel_delta_u + y * pixel_delta_v;
-            let ray_dir = pixel_sample - pos;
-            Ray::new(pos, ray_dir)
+            let ray_dir = pixel_sample - ray_pos;
+            Ray::new(ray_pos, ray_dir)
         };
 
         let pixel_samples_scale = 1.0 / self.samples_per_pixel as f32;

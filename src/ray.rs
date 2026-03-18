@@ -2,7 +2,7 @@ use glam::Vec3;
 
 pub struct Ray {
     pos: Vec3,
-    dir: Vec3
+    dir: Vec3,
 }
 
 impl Ray {

@@ -2,12 +2,12 @@ use glam::Vec3;
 use image::Rgb;
 
 use crate::hit::{HitableList, Sphere};
-use crate::material::{Lambertian, Metal};
+use crate::material::{Dielectric, Lambertian, Metal};
 
-mod ray;
 mod camrea;
 mod hit;
 mod material;
+mod ray;
 mod util;
 
 fn main() {
@@ -16,19 +16,33 @@ fn main() {
     let mut world = HitableList::new();
 
     world.push(Sphere {
-        pos: Vec3::new(-0.5, 0.0, -1.0),
+        pos: Vec3::new(0.0, -100.5, -1.0),
+        radius: 100.0,
+        material: Lambertian::new(Rgb([0.8, 0.8, 0.0])),
+    });
+
+    world.push(Sphere {
+        pos: Vec3::new(0.0, 0.0, -1.2),
         radius: 0.5,
-        material: Metal::new(Rgb([0.8, 0.1, 0.1]), 0.01)
+        material: Lambertian::new(Rgb([0.1, 0.2, 0.5])),
     });
+
     world.push(Sphere {
-        pos: Vec3::new(0.5, -0.3, -1.0),
-        radius: 0.2,
-        material: Lambertian::new(Rgb([0.1, 0.1, 0.8]))
+        pos: Vec3::new(-1.0, 0.0, -1.0),
+        radius: 0.5,
+        material: Dielectric::new(1.5),
     });
+
     world.push(Sphere {
-        pos: Vec3::new(0.0, -1000.5, -1.0),
-        radius: 1000.0,
-        material: Lambertian::new(Rgb([0.5, 0.5, 0.5]))
+        pos: Vec3::new(-1.0, 0.0, -1.0),
+        radius: 0.4,
+        material: Dielectric::new(1.0 / 1.5),
+    });
+    
+    world.push(Sphere {
+        pos: Vec3::new(1.0, 0.0, -1.0),
+        radius: 0.5,
+        material: Metal::new(Rgb([0.8, 0.6, 0.2]), 0.0),
     });
 
     camera.render(&mut img, &world);

@@ -1,12 +1,26 @@
+use std::sync::Arc;
+
 use glam::Vec3;
 use image::{Rgb, Rgb32FImage};
 
+#[cfg(feature = "parallel")]
+pub trait Texture: Send + Sync {
+    fn color(&self, u: f32, v: f32, pos: Vec3) -> Rgb<f32>;
+}
+
+#[cfg(not(feature = "parallel"))]
 pub trait Texture {
     fn color(&self, u: f32, v: f32, pos: Vec3) -> Rgb<f32>;
 }
 
+impl<T: Texture + Send> Texture for Arc<T> {
+    fn color(&self, u: f32, v: f32, pos: Vec3) -> Rgb<f32> {
+        T::color(&self, u, v, pos)
+    }
+}
+
 pub struct SolidColor {
-    pub albedo: Rgb<f32>
+    pub albedo: Rgb<f32>,
 }
 
 impl SolidColor {
@@ -24,12 +38,20 @@ impl Texture for SolidColor {
 pub struct CheckerTexture {
     pub inv_scale: f32,
     pub even: Box<dyn Texture>,
-    pub odd: Box<dyn Texture> 
+    pub odd: Box<dyn Texture>,
 }
 
 impl CheckerTexture {
-    pub fn new<T0, T1>(inv_scale: f32, even: T0, odd: T1) -> Self where T0: Texture + 'static, T1: Texture + 'static{
-        Self { inv_scale, even: Box::new(even) as _, odd: Box::new(odd) as _ }
+    pub fn new<T0, T1>(inv_scale: f32, even: T0, odd: T1) -> Self
+    where
+        T0: Texture + 'static,
+        T1: Texture + 'static,
+    {
+        Self {
+            inv_scale,
+            even: Box::new(even) as _,
+            odd: Box::new(odd) as _,
+        }
     }
 
     pub fn from_color(inv_scale: f32, even: Rgb<f32>, odd: Rgb<f32>) -> Self {
@@ -52,7 +74,7 @@ impl Texture for CheckerTexture {
 }
 
 pub struct ImageTexture {
-    pub img: Rgb32FImage
+    pub img: Rgb32FImage,
 }
 
 impl ImageTexture {

@@ -1,14 +1,18 @@
 use std::error::Error;
 use std::f32::consts::PI;
+use std::sync::Arc;
 
 use glam::Vec3;
 use image::Rgb;
 use rand::RngExt;
 
+use crate::bvh::BvhNode;
 use crate::hit::{HitableList, Quad, Sphere};
-use crate::material::{Dielectric, Lambertian, Metal};
+use crate::material::{Dielectric, Lambertian, Material, Metal};
 use crate::texture::{CheckerTexture, ImageTexture, SolidColor};
 
+mod aabb;
+mod bvh;
 mod camera;
 mod hit;
 mod material;
@@ -96,8 +100,9 @@ fn rand_sphere() -> Result<(), Box<dyn Error>> {
     let mut img = image::RgbImage::from_fn(1280, 720, |_, _| Rgb([0, 0, 0]));
     let mut camera = camera::Camera::default();
 
-    camera.samples_per_pixel = 50;
-    camera.max_depth = 5;
+    let start = std::time::Instant::now();
+    camera.samples_per_pixel = 500;
+    camera.max_depth = 50;
     camera.vfov = (PI / 180.0) * 20.0;
     camera.look_from = Vec3::new(13.0, 2.0, 3.0);
     camera.look_at = Vec3::new(0.0, 0.0, 0.0);
@@ -105,7 +110,9 @@ fn rand_sphere() -> Result<(), Box<dyn Error>> {
     camera.defocus = (PI / 180.0) * 0.6;
     camera.foucus_dist = 10.0;
 
+    let world = BvhNode::new(world.objects);
     camera.render(&mut img, &world);
+    println!("{:?}", start.elapsed());
     img.save("rand_sphere.png")?;
     Ok(())
 }
@@ -194,45 +201,63 @@ fn quads() -> Result<(), Box<dyn Error>> {
 
 fn ferris3d() -> Result<(), Box<dyn Error>> {
     let (models, _materials) =
-        tobj::load_obj("ferris3d_v1.0.obj", &tobj::GPU_LOAD_OPTIONS)?;
+        tobj::load_obj("./assets/ferris3d_v1.0.obj", &tobj::GPU_LOAD_OPTIONS)?;
     let mut world = HitableList::new();
 
+    let albedo = ImageTexture::new(image::open("./assets/albedo.png")?.into_rgb32f());
+    let albedo = Arc::new(Lambertian::new(albedo));
+
+    let default = Arc::new(Lambertian::from(Rgb([0.9, 0.2, 0.3])));
     for model in models {
         let mesh = &model.mesh;
+
+        let material = match mesh.material_id {
+            Some(_) => albedo.clone(),
+            None => default.clone(),
+        };
         for tri in mesh.indices.chunks(3) {
-            let verts = tri
-                .iter()
-                .map(|idx| {
-                    let i = *idx as usize;
-                    Vec3::new(
-                        mesh.positions[3 * i],
-                        mesh.positions[3 * i + 1],
-                        mesh.positions[3 * i + 2],
-                    )
-                })
-                .collect::<Vec<_>>();
-            world.push(hit::Tri::new(
-                verts[0],
-                verts[1] - verts[0],
-                verts[2] - verts[0],
-                Lambertian::from(Rgb([0.9, 0.2, 0.3])),
-            ));
+            let mut verts = [Vec3::default(); 3];
+            let mut uvs = [(0.0, 0.0); 3];
+
+            for i in 0..3 {
+                let idx = tri[i] as usize;
+                verts[i] = Vec3::new(
+                    mesh.positions[3 * idx],
+                    mesh.positions[3 * idx + 1],
+                    mesh.positions[3 * idx + 2],
+                );
+                if !mesh.texcoords.is_empty() {
+                    uvs[i] = (mesh.texcoords[2 * idx], mesh.texcoords[2 * idx + 1]);
+                }
+            }
+            world.push(
+                hit::Tri::new(
+                    verts[0],
+                    verts[1] - verts[0],
+                    verts[2] - verts[0],
+                    material.clone(),
+                )
+                .with_uvs(uvs),
+            );
         }
     }
 
     let mut img = image::RgbImage::from_fn(1280, 720, |_, _| Rgb([0, 0, 0]));
     let mut camera = camera::Camera::default();
 
-    camera.samples_per_pixel = 500;
-    camera.max_depth = 50;
+    camera.samples_per_pixel = 1000;
+    camera.max_depth = 200;
     camera.vfov = (PI / 180.0) * 30.0;
-    camera.look_from = Vec3::new(0.0, 0.0, 2.0);
+    camera.look_from = Vec3::new(0.0, 0.0, 3.0);
     camera.look_at = Vec3::new(0.0, 0.5, 0.0);
     camera.vup = Vec3::new(0.0, 1.0, 0.0);
-    camera.defocus = (PI / 180.0) * 0.6;
+    camera.defocus = 0.0;
     camera.foucus_dist = 10.0;
 
+    let start = std::time::Instant::now();
+    let world = BvhNode::new(world.objects);
     camera.render(&mut img, &world);
+    println!("{:?}", start.elapsed());
     img.save("ferris3d.png")?;
     Ok(())
 }

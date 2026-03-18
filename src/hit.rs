@@ -1,7 +1,8 @@
 use std::f32::consts::PI;
 
-use glam::Vec3;
+use glam::{Vec2, Vec3};
 
+use crate::aabb::AABB;
 use crate::material::Material;
 use crate::ray::Ray;
 
@@ -15,8 +16,16 @@ pub struct HitRecord<'a> {
     pub material: &'a dyn Material,
 }
 
+#[cfg(feature = "parallel")]
+pub trait Hitable: Send + Sync {
+    fn hit(&self, ray: &Ray, ray_min: f32, ray_max: f32) -> Option<HitRecord<'_>>;
+    fn bounding_box(&self) -> AABB;
+}
+
+#[cfg(not(feature = "parallel"))]
 pub trait Hitable {
     fn hit(&self, ray: &Ray, ray_min: f32, ray_max: f32) -> Option<HitRecord<'_>>;
+    fn bounding_box(&self) -> AABB;
 }
 
 pub fn face_normal(ray: &Ray, outward_normal: &mut Vec3) -> bool {
@@ -35,6 +44,14 @@ pub struct Sphere<M: Material> {
 }
 
 impl<M: Material> Sphere<M> {
+    pub fn new(pos: Vec3, radius: f32, material: M) -> Self {
+        Self {
+            pos,
+            radius,
+            material,
+        }
+    }
+
     fn get_uv(&self, pos: Vec3) -> (f32, f32) {
         let theta = (-pos.y).acos();
         let phi = (-pos.z).atan2(pos.x) + PI;
@@ -81,6 +98,11 @@ impl<M: Material> Hitable for Sphere<M> {
             front_face,
             material: &self.material,
         });
+    }
+
+    fn bounding_box(&self) -> AABB {
+        let offset = Vec3::new(self.radius, self.radius, self.radius);
+        AABB::from_points(self.pos - offset, self.pos + offset)
     }
 }
 
@@ -146,12 +168,19 @@ impl<M: Material> Hitable for Quad<M> {
             material: &self.material,
         })
     }
+
+    fn bounding_box(&self) -> AABB {
+        let aabb0 = AABB::from_points(self.start, self.start + self.u + self.v);
+        let aabb1 = AABB::from_points(self.start + self.u, self.start + self.v);
+        aabb0.merge(&aabb1)
+    }
 }
 
 pub struct Tri<M: Material> {
     pub start: Vec3,
     pub u: Vec3,
     pub v: Vec3,
+    pub uvs: [(f32, f32); 3],
     pub material: M,
 }
 
@@ -161,7 +190,18 @@ impl<M: Material> Tri<M> {
             start,
             u,
             v,
+            uvs: [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)],
             material,
+        }
+    }
+
+    pub fn with_uvs(self, uvs: [(f32, f32); 3]) -> Self {
+        Self {
+            start: self.start,
+            u: self.u,
+            v: self.v,
+            uvs,
+            material: self.material,
         }
     }
 
@@ -198,30 +238,43 @@ impl<M: Material> Hitable for Tri<M> {
         let (u, v) = self.is_interior(alpha, beta)?;
         let front_face = face_normal(ray, &mut normal);
 
+        let hit_u = (1.0 - u - v) * self.uvs[0].0 + u * self.uvs[1].0 + v * self.uvs[2].0;
+        let hit_v = (1.0 - u - v) * self.uvs[0].1 + u * self.uvs[1].1 + v * self.uvs[2].1;
+
         Some(HitRecord {
             pos: intersection,
             normal,
             t,
-            u,
-            v,
+            u: hit_u,
+            v: hit_v,
             front_face,
             material: &self.material,
         })
+    }
+
+    fn bounding_box(&self) -> AABB {
+        let aabb0 = AABB::from_points(self.start, self.start + self.u + self.v);
+        let aabb1 = AABB::from_points(self.start + self.u, self.start + self.v);
+        aabb0.merge(&aabb1)
     }
 }
 
 pub struct HitableList {
     pub objects: Vec<Box<dyn Hitable>>,
+    pub aabb: AABB,
 }
 
 impl HitableList {
     pub fn new() -> Self {
         Self {
             objects: Vec::new(),
+            aabb: AABB::default(),
         }
     }
 
     pub fn push<T: Hitable + 'static>(&mut self, h: T) {
+        let aabb = h.bounding_box();
+        self.aabb = self.aabb.merge(&aabb);
         self.objects.push(Box::new(h) as _);
     }
 }
@@ -241,5 +294,9 @@ impl Hitable for HitableList {
         }
 
         output
+    }
+
+    fn bounding_box(&self) -> AABB {
+        self.aabb.clone()
     }
 }

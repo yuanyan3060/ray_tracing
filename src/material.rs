@@ -14,7 +14,21 @@ pub struct ScatterRecord {
     pub ray: Ray,
 }
 
-pub trait Material {
+#[cfg(feature = "parallel")]
+pub trait Material: Send + Sync {
+    fn scatter(&self, ray: &Ray, hit: &HitRecord) -> Option<ScatterRecord> {
+        _ = (ray, hit);
+        None
+    }
+
+    fn emitted(&self, u: f32, v: f32, pos: Vec3) -> Rgb<f32> {
+        _ = (u, v, pos);
+        Rgb([0.0, 0.0, 0.0])
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+pub trait Material: Send + Sync {
     fn scatter(&self, ray: &Ray, hit: &HitRecord) -> Option<ScatterRecord> {
         _ = (ray, hit);
         None

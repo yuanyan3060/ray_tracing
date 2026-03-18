@@ -903,6 +903,7 @@ dependencies = [
  "glam",
  "image",
  "rand 0.10.0",
+ "rayon",
  "tobj",
 ]
 

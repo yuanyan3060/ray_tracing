@@ -46,3 +46,10 @@ pub fn near_zero(v: Vec3) -> bool {
     let s = 1e-8;
     v.x.abs() < s && v.y.abs() < s && v.z.abs() < s
 }
+
+#[derive(Clone, Copy, Debug)]
+pub enum Aixs {
+    X = 0,
+    Y = 1,
+    Z = 2,
+}

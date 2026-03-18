@@ -1,8 +1,10 @@
 use std::f32::consts::PI;
 
 use glam::Vec3;
+use image::buffer::{PixelsMut, RowsMut};
 use image::{Rgb, RgbImage};
 use rand::RngExt;
+use rand::rngs::ThreadRng;
 
 use crate::hit::{Hitable, HitableList};
 use crate::ray::Ray;
@@ -44,7 +46,7 @@ impl Camera {
         self.look_from + (v.x * defocus_disk_u) + (v.y * defocus_disk_v)
     }
 
-    pub fn render(&self, img: &mut RgbImage, world: &HitableList) {
+    pub fn render<H: Hitable>(&self, img: &mut RgbImage, world: &H) {
         let (img_w, img_h) = img.dimensions();
 
         let pos = self.look_from;
@@ -72,9 +74,7 @@ impl Camera {
         let defocus_disk_u = defocus_radius * u;
         let defocus_disk_v = defocus_radius * v;
 
-        let mut rng = rand::rng();
-
-        let mut get_ray = |x: u32, y: u32| {
+        let get_ray = |x: u32, y: u32, rng: &mut ThreadRng| {
             let x = x as f32 + rng.random_range(-0.5..0.5);
             let y = y as f32 + rng.random_range(-0.5..0.5);
 
@@ -90,12 +90,13 @@ impl Camera {
         };
 
         let pixel_samples_scale = 1.0 / self.samples_per_pixel as f32;
-        for y in 0..img_h {
-            for x in 0..img_w {
+        let render_pixel = |(y, row): (usize, PixelsMut<'_, Rgb<u8>>)| {
+            for (x, p) in row.enumerate() {
                 let mut color = [0.0, 0.0, 0.0];
+                let mut rng = rand::rng();
 
                 for _ in 0..self.samples_per_pixel {
-                    let ray = get_ray(x, y);
+                    let ray = get_ray(x as u32, y as u32, &mut rng);
                     let c = ray_color(&ray, world, self.max_depth);
                     for i in 0..3 {
                         color[i] += c.0[i]
@@ -103,9 +104,21 @@ impl Camera {
                 }
 
                 let rgb = linear_to_gamma(Rgb(color), pixel_samples_scale);
-                img.put_pixel(x, y, rgb);
+                *p = rgb;
             }
+        };
+
+        #[cfg(feature = "rayon")]
+        if img_h >= 32 {
+            use rayon::iter::{ParallelBridge, ParallelIterator};
+            img.rows_mut()
+                .enumerate()
+                .par_bridge()
+                .for_each(render_pixel);
+            return;
         }
+
+        img.rows_mut().enumerate().for_each(render_pixel);
     }
 }
 

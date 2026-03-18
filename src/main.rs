@@ -17,7 +17,7 @@ mod texture;
 mod util;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    quads()
+    ferris3d()
 }
 
 fn rand_sphere() -> Result<(), Box<dyn Error>> {
@@ -149,7 +149,7 @@ fn quads() -> Result<(), Box<dyn Error>> {
     ));
 
     world.push(Quad::new(
-        Vec3::new(-2.0,-2.0, 0.0),
+        Vec3::new(-2.0, -2.0, 0.0),
         Vec3::new(4.0, 0.0, 0.0),
         Vec3::new(0.0, 4.0, 0.0),
         Lambertian::from(Rgb([0.2, 1.0, 0.2])),
@@ -189,5 +189,50 @@ fn quads() -> Result<(), Box<dyn Error>> {
 
     camera.render(&mut img, &world);
     img.save("quads.png")?;
+    Ok(())
+}
+
+fn ferris3d() -> Result<(), Box<dyn Error>> {
+    let (models, _materials) =
+        tobj::load_obj("ferris3d_v1.0.obj", &tobj::GPU_LOAD_OPTIONS)?;
+    let mut world = HitableList::new();
+
+    for model in models {
+        let mesh = &model.mesh;
+        for tri in mesh.indices.chunks(3) {
+            let verts = tri
+                .iter()
+                .map(|idx| {
+                    let i = *idx as usize;
+                    Vec3::new(
+                        mesh.positions[3 * i],
+                        mesh.positions[3 * i + 1],
+                        mesh.positions[3 * i + 2],
+                    )
+                })
+                .collect::<Vec<_>>();
+            world.push(hit::Tri::new(
+                verts[0],
+                verts[1] - verts[0],
+                verts[2] - verts[0],
+                Lambertian::from(Rgb([0.9, 0.2, 0.3])),
+            ));
+        }
+    }
+
+    let mut img = image::RgbImage::from_fn(1280, 720, |_, _| Rgb([0, 0, 0]));
+    let mut camera = camera::Camera::default();
+
+    camera.samples_per_pixel = 500;
+    camera.max_depth = 50;
+    camera.vfov = (PI / 180.0) * 30.0;
+    camera.look_from = Vec3::new(0.0, 0.0, 2.0);
+    camera.look_at = Vec3::new(0.0, 0.5, 0.0);
+    camera.vup = Vec3::new(0.0, 1.0, 0.0);
+    camera.defocus = (PI / 180.0) * 0.6;
+    camera.foucus_dist = 10.0;
+
+    camera.render(&mut img, &world);
+    img.save("ferris3d.png")?;
     Ok(())
 }

@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use glam::Vec3;
 
 use crate::material::Material;
@@ -7,6 +9,8 @@ pub struct HitRecord<'a> {
     pub pos: Vec3,
     pub normal: Vec3,
     pub t: f32,
+    pub u: f32,
+    pub v: f32,
     pub front_face: bool,
     pub material: &'a dyn Material,
 }
@@ -28,6 +32,17 @@ pub struct Sphere<M: Material> {
     pub pos: Vec3,
     pub radius: f32,
     pub material: M,
+}
+
+impl<M: Material> Sphere<M> {
+    fn get_uv(&self, pos: Vec3) -> (f32, f32) {
+        let theta = (-pos.y).acos();
+        let phi = (-pos.z).atan2(pos.x) + PI;
+
+        let u = phi / (2.0 * PI);
+        let v = theta / PI;
+        (u, v)
+    }
 }
 
 impl<M: Material> Hitable for Sphere<M> {
@@ -56,13 +71,142 @@ impl<M: Material> Hitable for Sphere<M> {
         let mut normal = (pos - self.pos) / self.radius;
         let front_face = face_normal(ray, &mut normal);
 
+        let (u, v) = self.get_uv(normal);
         return Some(HitRecord {
             pos,
             normal,
             t,
+            u,
+            v,
             front_face,
             material: &self.material,
         });
+    }
+}
+
+pub struct Quad<M: Material> {
+    pub start: Vec3,
+    pub u: Vec3,
+    pub v: Vec3,
+    pub material: M,
+}
+
+impl<M: Material> Quad<M> {
+    pub fn new(start: Vec3, u: Vec3, v: Vec3, material: M) -> Self {
+        Self {
+            start,
+            u,
+            v,
+            material,
+        }
+    }
+
+    pub fn is_interior(&self, a: f32, b: f32) -> Option<(f32, f32)> {
+        if !(0.0..1.0).contains(&a) {
+            None
+        } else if !(0.0..1.0).contains(&b) {
+            None
+        } else {
+            Some((a, b))
+        }
+    }
+}
+
+impl<M: Material> Hitable for Quad<M> {
+    fn hit(&self, ray: &Ray, ray_min: f32, ray_max: f32) -> Option<HitRecord<'_>> {
+        let n = self.u.cross(self.v);
+        let mut normal = n.normalize();
+        let d = normal.dot(self.start);
+        let w = n / n.dot(n);
+
+        let denom = normal.dot(ray.direction());
+        if denom.abs() < 1e-8 {
+            return None;
+        }
+
+        let t = (d - normal.dot(ray.postion())) / denom;
+        if t < ray_min || t > ray_max {
+            return None;
+        }
+
+        let intersection = ray.at(t);
+        let planar_hitpt_vector = intersection - self.start;
+        let alpha = w.dot(planar_hitpt_vector.cross(self.v));
+        let beta = w.dot(self.u.cross(planar_hitpt_vector));
+        let (u, v) = self.is_interior(alpha, beta)?;
+        let front_face = face_normal(ray, &mut normal);
+
+        Some(HitRecord {
+            pos: intersection,
+            normal,
+            t,
+            u,
+            v,
+            front_face,
+            material: &self.material,
+        })
+    }
+}
+
+pub struct Tri<M: Material> {
+    pub start: Vec3,
+    pub u: Vec3,
+    pub v: Vec3,
+    pub material: M,
+}
+
+impl<M: Material> Tri<M> {
+    pub fn new(start: Vec3, u: Vec3, v: Vec3, material: M) -> Self {
+        Self {
+            start,
+            u,
+            v,
+            material,
+        }
+    }
+
+    pub fn is_interior(&self, a: f32, b: f32) -> Option<(f32, f32)> {
+        if a > 0.0 && b > 0.0 && a + b < 1.0 {
+            Some((a, b))
+        } else {
+            None
+        }
+    }
+}
+
+impl<M: Material> Hitable for Tri<M> {
+    fn hit(&self, ray: &Ray, ray_min: f32, ray_max: f32) -> Option<HitRecord<'_>> {
+        let n = self.u.cross(self.v);
+        let mut normal = n.normalize();
+        let d = normal.dot(self.start);
+        let w = n / n.dot(n);
+
+        let denom = normal.dot(ray.direction());
+        if denom.abs() < 1e-8 {
+            return None;
+        }
+
+        let t = (d - normal.dot(ray.postion())) / denom;
+        if t < ray_min || t > ray_max {
+            return None;
+        }
+
+        let intersection = ray.at(t);
+        let planar_hitpt_vector = intersection - self.start;
+        let alpha = w.dot(planar_hitpt_vector.cross(self.v));
+        let beta = w.dot(self.u.cross(planar_hitpt_vector));
+        let (u, v) = self.is_interior(alpha, beta)?;
+        let front_face = face_normal(ray, &mut normal);
+
+        Some(HitRecord {
+            pos: intersection,
+            normal,
+            t,
+            u,
+            v,
+            front_face,
+            material: &self.material,
+        })
     }
 }
 

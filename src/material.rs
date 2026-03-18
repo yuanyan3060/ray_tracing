@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
+use glam::Vec3;
 use image::Rgb;
 use rand::RngExt;
 
 use crate::hit::HitRecord;
 use crate::ray::Ray;
+use crate::texture::{SolidColor, Texture};
 use crate::util::{near_zero, random_unit_vec3};
 
 pub struct ScatterRecord {
@@ -11,16 +15,42 @@ pub struct ScatterRecord {
 }
 
 pub trait Material {
-    fn scatter(&self, ray: &Ray, hit: &HitRecord) -> Option<ScatterRecord>;
+    fn scatter(&self, ray: &Ray, hit: &HitRecord) -> Option<ScatterRecord> {
+        _ = (ray, hit);
+        None
+    }
+
+    fn emitted(&self, u: f32, v: f32, pos: Vec3) -> Rgb<f32> {
+        _ = (u, v, pos);
+        Rgb([0.0, 0.0, 0.0])
+    }
+}
+
+impl<T: Material> Material for Arc<T> {
+    fn emitted(&self, u: f32, v: f32, pos: Vec3) -> Rgb<f32> {
+        T::emitted(&*self, u, v, pos)
+    }
+
+    fn scatter(&self, ray: &Ray, hit: &HitRecord) -> Option<ScatterRecord> {
+        T::scatter(&*self, ray, hit)
+    }
 }
 
 pub struct Lambertian {
-    pub albedo: Rgb<f32>,
+    pub tex: Box<dyn Texture>,
 }
 
 impl Lambertian {
-    pub fn new(albedo: Rgb<f32>) -> Self {
-        Self { albedo }
+    pub fn new(tex: impl Texture + 'static) -> Self {
+        Self {
+            tex: Box::new(tex) as _,
+        }
+    }
+}
+
+impl From<Rgb<f32>> for Lambertian {
+    fn from(value: Rgb<f32>) -> Self {
+        Self::new(SolidColor::new(value))
     }
 }
 
@@ -33,7 +63,7 @@ impl Material for Lambertian {
         }
         let scatter_ray = Ray::new(hit.pos, scatter_direction);
         return Some(ScatterRecord {
-            attenuation: self.albedo,
+            attenuation: self.tex.color(hit.u, hit.v, hit.pos),
             ray: scatter_ray,
         });
     }
@@ -111,4 +141,28 @@ fn reflectance(cosine: f32, refraction_index: f32) -> f32 {
     let r0 = (1.0 - refraction_index) / (1.0 + refraction_index);
     let r0 = r0 * r0;
     r0 + (1.0 - r0) * (1.0 - cosine).powi(5)
+}
+
+pub struct DiffuseLight {
+    pub tex: Box<dyn Texture>,
+}
+
+impl DiffuseLight {
+    pub fn new(tex: impl Texture + 'static) -> Self {
+        Self {
+            tex: Box::new(tex) as _,
+        }
+    }
+}
+
+impl From<Rgb<f32>> for DiffuseLight {
+    fn from(value: Rgb<f32>) -> Self {
+        Self::new(SolidColor::new(value))
+    }
+}
+
+impl Material for DiffuseLight {
+    fn emitted(&self, u: f32, v: f32, pos: Vec3) -> Rgb<f32> {
+        self.tex.color(u, v, pos)
+    }
 }

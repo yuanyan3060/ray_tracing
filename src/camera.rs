@@ -133,14 +133,16 @@ fn ray_color<H: Hitable>(ray: &Ray, hitable: &H, depth: u32) -> Rgb<f32> {
     }
 
     if let Some(hit) = hitable.hit(ray, 0.01, 100000.0) {
+        let color_from_emission = hit.material.emitted(hit.u, hit.v, hit.pos);
         if let Some(scatter) = hit.material.scatter(ray, &hit) {
             let mut color = ray_color(&scatter.ray, hitable, depth - 1);
             for i in 0..3 {
                 color.0[i] *= scatter.attenuation.0[i];
+                color.0[i] += color_from_emission.0[i];
             }
             return color;
         }
-        return Rgb([0.0, 0.0, 0.0]);
+        return color_from_emission;
     }
 
     let dir = ray.direction().normalize();

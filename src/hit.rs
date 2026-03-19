@@ -182,6 +182,7 @@ pub struct Tri<M: Material> {
     pub u: Vec3,
     pub v: Vec3,
     pub uvs: [(f32, f32); 3],
+    pub normals: Option<[Vec3; 3]>,
     pub material: M,
 }
 
@@ -192,6 +193,7 @@ impl<M: Material> Tri<M> {
             u,
             v,
             uvs: [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)],
+            normals: None,
             material,
         }
     }
@@ -202,6 +204,18 @@ impl<M: Material> Tri<M> {
             u: self.u,
             v: self.v,
             uvs,
+            normals: self.normals,
+            material: self.material,
+        }
+    }
+
+    pub fn with_normals(self, normals: [Vec3; 3]) -> Self {
+        Self {
+            start: self.start,
+            u: self.u,
+            v: self.v,
+            uvs: self.uvs,
+            normals: Some(normals),
             material: self.material,
         }
     }
@@ -237,6 +251,11 @@ impl<M: Material> Hitable for Tri<M> {
         let alpha = w.dot(planar_hitpt_vector.cross(self.v));
         let beta = w.dot(self.u.cross(planar_hitpt_vector));
         let (u, v) = self.is_interior(alpha, beta)?;
+
+        if let Some(normals) = self.normals {
+            normal = (1.0 - u - v) * normals[0] + u * normals[1] + v * normals[2];
+        }
+        
         let front_face = face_normal(ray, &mut normal);
 
         let hit_u = (1.0 - u - v) * self.uvs[0].0 + u * self.uvs[1].0 + v * self.uvs[2].0;

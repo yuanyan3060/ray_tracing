@@ -8,8 +8,8 @@ use rand::RngExt;
 
 use crate::bvh::BvhNode;
 use crate::hit::{HitableList, Quad, Sphere};
-use crate::material::{Dielectric, Lambertian, Metal};
-use crate::texture::ImageTexture;
+use crate::material::{Dielectric, Lambertian, Metal, Standard};
+use crate::texture::{ImageTexture, SolidColor};
 
 mod aabb;
 mod bvh;
@@ -210,9 +210,18 @@ fn ferris3d() -> Result<(), Box<dyn Error>> {
     let mut world = HitableList::new();
 
     let albedo = ImageTexture::new(image::open("./assets/albedo.png")?.into_rgb32f());
-    let albedo = Arc::new(Lambertian::new(albedo));
+    let albedo = Arc::new(Standard {
+        tex: Box::new(albedo),
+        refraction_index: 1.366,
+        fuzz: 0.1
+    });
 
-    let default = Arc::new(Lambertian::from(Rgb([0.9, 0.2, 0.3])));
+    let default = Arc::new(Standard {
+        tex: Box::new(SolidColor::new(Rgb([0.9, 0.2, 0.3]))),
+        refraction_index: 1.0,
+        fuzz: 0.1
+    });
+
     for model in models {
         let mesh = &model.mesh;
 
@@ -223,6 +232,7 @@ fn ferris3d() -> Result<(), Box<dyn Error>> {
         for tri in mesh.indices.chunks(3) {
             let mut verts = [Vec3::default(); 3];
             let mut uvs = [(0.0, 0.0); 3];
+            let mut normals = [Vec3::ZERO; 3];
 
             for i in 0..3 {
                 let idx = tri[i] as usize;
@@ -231,8 +241,13 @@ fn ferris3d() -> Result<(), Box<dyn Error>> {
                     mesh.positions[3 * idx + 1],
                     mesh.positions[3 * idx + 2],
                 );
+                
                 if !mesh.texcoords.is_empty() {
                     uvs[i] = (mesh.texcoords[2 * idx], mesh.texcoords[2 * idx + 1]);
+                }
+
+                if !mesh.normals.is_empty() {
+                    normals[i] = Vec3::new(mesh.normals[3 * idx], mesh.normals[3 * idx + 1], mesh.normals[3 * idx + 2]);
                 }
             }
             world.push(
@@ -242,7 +257,8 @@ fn ferris3d() -> Result<(), Box<dyn Error>> {
                     verts[2] - verts[0],
                     material.clone(),
                 )
-                .with_uvs(uvs),
+                .with_uvs(uvs)
+                .with_normals(normals),
             );
         }
     }
@@ -273,9 +289,19 @@ fn ferris3d_and_sphere() -> Result<(), Box<dyn Error>> {
     let mut world = HitableList::new();
 
     let albedo = ImageTexture::new(image::open("./assets/albedo.png")?.into_rgb32f());
-    let albedo = Arc::new(Lambertian::new(albedo));
+    let albedo = Arc::new(Standard {
+        tex: Box::new(albedo),
+        refraction_index: 1.366,
+        fuzz: 0.1
+        
+    });
 
-    let default = Arc::new(Lambertian::from(Rgb([0.9, 0.2, 0.3])));
+    let default = Arc::new(Standard {
+        tex: Box::new(SolidColor::new(Rgb([0.9, 0.2, 0.3]))),
+        refraction_index: 1.0,
+        fuzz: 0.0
+    });
+
     for model in models {
         let mesh = &model.mesh;
 
@@ -286,6 +312,7 @@ fn ferris3d_and_sphere() -> Result<(), Box<dyn Error>> {
         for tri in mesh.indices.chunks(3) {
             let mut verts = [Vec3::default(); 3];
             let mut uvs = [(0.0, 0.0); 3];
+            let mut normals = [Vec3::ZERO; 3];
 
             for i in 0..3 {
                 let idx = tri[i] as usize;
@@ -294,8 +321,13 @@ fn ferris3d_and_sphere() -> Result<(), Box<dyn Error>> {
                     mesh.positions[3 * idx + 1],
                     mesh.positions[3 * idx + 2],
                 );
+                
                 if !mesh.texcoords.is_empty() {
                     uvs[i] = (mesh.texcoords[2 * idx], mesh.texcoords[2 * idx + 1]);
+                }
+
+                if !mesh.normals.is_empty() {
+                    normals[i] = Vec3::new(mesh.normals[3 * idx], mesh.normals[3 * idx + 1], mesh.normals[3 * idx + 2]);
                 }
             }
             world.push(
@@ -305,7 +337,8 @@ fn ferris3d_and_sphere() -> Result<(), Box<dyn Error>> {
                     verts[2] - verts[0],
                     material.clone(),
                 )
-                .with_uvs(uvs),
+                .with_uvs(uvs)
+                .with_normals(normals),
             );
         }
     }
@@ -317,7 +350,8 @@ fn ferris3d_and_sphere() -> Result<(), Box<dyn Error>> {
     });
 
     let mut img = image::RgbImage::from_fn(1280, 720, |_, _| Rgb([0, 0, 0]));
-    let env = image::open("assets/env.png")?.into_rgb32f();
+    let mut env = image::open("assets/env.png")?.into_rgb32f();
+    env.iter_mut().for_each(|x| *x = *x * 3.0);
     let mut camera = camera::Camera::default();
 
     camera.samples_per_pixel = 1000;

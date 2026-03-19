@@ -182,3 +182,50 @@ impl Material for DiffuseLight {
         self.tex.color(u, v, pos)
     }
 }
+
+pub struct Standard {
+    pub tex: Box<dyn Texture>,
+    pub refraction_index: f32,
+    pub fuzz: f32,
+}
+
+impl Material for Standard {
+    fn scatter(&self, ray: &Ray, hit: &HitRecord) -> Option<ScatterRecord> {
+        let ri = if hit.front_face {
+            1.0 / self.refraction_index
+        } else {
+            self.refraction_index
+        };
+
+        let dir = ray.direction().normalize();
+
+        let cos_theta = (-dir).dot(hit.normal).min(1.0);
+        let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
+
+        let mut cannot_refract = ri * sin_theta > 1.0;
+        cannot_refract =
+            cannot_refract || reflectance(cos_theta, ri) > rand::rng().random_range(0.0..1.0);
+
+        if cannot_refract {
+            let reflected = dir.reflect(hit.normal);
+            let reflected = reflected.normalize() + (self.fuzz * random_unit_vec3());
+            let scatter_ray = Ray::new(hit.pos, reflected);
+
+            Some(ScatterRecord {
+                attenuation: Rgb([1.0, 1.0, 1.0]),
+                ray: scatter_ray,
+            })
+        } else {
+            let mut scatter_direction = hit.normal + random_unit_vec3();
+
+            if near_zero(scatter_direction) {
+                scatter_direction = hit.normal;
+            }
+            let scatter_ray = Ray::new(hit.pos, scatter_direction);
+            Some(ScatterRecord {
+                attenuation: self.tex.color(hit.u, hit.v, hit.pos),
+                ray: scatter_ray,
+            })
+        }
+    }
+}

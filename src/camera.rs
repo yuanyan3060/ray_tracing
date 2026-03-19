@@ -156,7 +156,7 @@ fn ray_color<H: Hitable>(
         return Rgb([0.0, 0.0, 0.0]);
     }
 
-    if let Some(hit) = hitable.hit(ray, 0.01, 100000.0) {
+    if let Some(hit) = hitable.hit(ray, 0.001, 100000.0) {
         let color_from_emission = hit.material.emitted(hit.u, hit.v, hit.pos);
         if let Some(scatter) = hit.material.scatter(ray, &hit) {
             let mut color = ray_color(&scatter.ray, hitable, env, depth - 1, false);
